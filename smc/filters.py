@@ -8,6 +8,22 @@ from smc import models
 
 info = lambda *a, **k: print(*a, file=sys.stderr, **k)
 
+def sis(model, observations, N):
+    "sequential important sampling"
+    T = len(observations)
+    X = np.zeros((T,N))
+    W = np.zeros((T,N))
+
+    for t, y in enumerate(observations):
+        if t == 0:
+            X[t, :] = model.p_initial.rvs(N)
+        else:
+            X[t, :] = model.sample_transitions(t, X[t-1, :])
+        W[t, :] = model.p_emission(t, X[t, :]).pdf(y)
+        W[t, :] = W[t, :] / W[t, :].sum()
+    return X, W
+
+
 
 def sir(model, observations, N):
     "sequential importance resampling"
@@ -33,18 +49,34 @@ if __name__ == "__main__":
     # generate some data and filter it
     import os
     model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
-    method = os.environ.get('METHOD', 'sir')
-    T = int(os.environ.get('T', '10'))
-    N = int(os.environ.get('N', '100'))
+    method = os.environ.get('METHOD', 'sis')
+    T = int(os.environ.get('T', '100'))
+    N = int(os.environ.get('N', '500'))
     info('(model, method, T, N) =', (model, method, T, N))
-    model = models.trig_toy_model()
+    #model = models.trig_toy_model()
     gen = list(model.generate(T))
     X, W = eval(method)(model, [y for x, y in gen], N=N)
 
     # plot the result
-
     __import__('mpl_toolkits.mplot3d')
     from matplotlib import pyplot as plt
+    #Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)
+    if method == "sis":
+            filter_mean = np.average(X, 1, W)
+            filter_sd = np.sqrt(np.average((X-np.repeat(filter_mean, N).reshape((T,N)))**2, 1, W))
+    else:
+        filter_mean = np.sum(X, 1)/N
+        filter_sd = np.std(X, 1)
+    fig = plt.figure()
+    plt.plot(np.arange(T), [x for x, y in gen], label= "True Volatility")
+    plt.plot(np.arange(T), filter_mean, label="Filter Mean", color='r')
+    plt.plot(np.arange(T),filter_mean + filter_sd, label="+/- 1 S.D", linestyle='--', color='g')
+    plt.plot(np.arange(T),filter_mean - filter_sd, linestyle='--', color='g')
+    title = "SV Model: " + method.upper() + " Filtering Estimates"
+    plt.legend()
+    plt.title(title)
+    plt.show()
+
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     bins = np.linspace(np.min(X)*0.9, np.max(X)*1.1, 100)
