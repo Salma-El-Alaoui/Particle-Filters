@@ -50,13 +50,27 @@ def sir(model, observations, N):
 def plot_estimate(mean, sd):
     "Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)"
     fig = plt.figure()
-    plt.plot(np.arange(T), [x for x, y in gen], label= "True Volatility")
-    plt.plot(np.arange(T), mean, label="Filter Mean", color='r')
-    plt.plot(np.arange(T), mean + sd, label="+/- 1 S.D", linestyle='--', color='g')
-    plt.plot(np.arange(T), mean - sd, linestyle='--', color='g')
+    ax = fig.add_subplot(111)
+    ax.plot(np.arange(T), [x for x, y in gen], label= "True Volatility")
+    ax.plot(np.arange(T), mean, label="Filter Mean", color='r')
+    ax.plot(np.arange(T), mean + sd, label="+/- 1 S.D", linestyle='--', color='g')
+    ax.plot(np.arange(T), mean - sd, linestyle='--', color='g')
     title = "SV Model: " + method.upper() + " Filtering Estimates"
     plt.legend()
     plt.title(title)
+
+
+def plot_particle_distribution(X, W, iterations = [2, 10, 50]):
+
+    N = W[0,:].size
+    for n in iterations:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.hist(W[n,:], np.sqrt(N))
+        plt.title("n= " + str(n))
+        plt.xlabel("Normalized Weights")
+        plt.ylabel("Particle Count")
+        plt.show()
 
 
 def plot_distribution(X):
@@ -85,7 +99,7 @@ if __name__ == "__main__":
     # generate some data and filter it
     import os
     model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
-    method = os.environ.get('METHOD', 'sis')
+    method = os.environ.get('METHOD', 'sir')
     T = int(os.environ.get('T', '100'))
     N = int(os.environ.get('N', '500'))
     outname = os.environ.get('OUTPUT')
@@ -105,6 +119,7 @@ if __name__ == "__main__":
         filter_sd = X.std(axis=1)
 
     plot_estimate(filter_mean, filter_sd)
+    plot_particle_distribution(X, W)
     ax = plot_distribution(X)
     plt.tight_layout()
 
