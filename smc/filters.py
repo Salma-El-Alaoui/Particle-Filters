@@ -62,8 +62,17 @@ if __name__ == "__main__":
     from matplotlib import pyplot as plt
     #Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)
     if method == "sis":
-            filter_mean = np.average(X, 1, W)
-            filter_sd = np.sqrt(np.average((X-np.repeat(filter_mean, N).reshape((T,N)))**2, 1, W))
+        #filter_mean = np.average(X, 1, W)
+        filter_mean = np.zeros(T)
+        for t in range(T):
+            filter_mean[t] = np.sum(np.multiply(W[t, :], X[t, :]))/np.sum(W[t,:])
+            
+        filter_sd = np.zeros(T)
+        for t in range(T):
+            for n in range(N):
+                filter_sd[t] += W[t,n]*((X[t,n]-filter_mean[t])**2)
+            filter_sd[t] = np.sqrt(filter_sd[t])
+        print(list(filter_sd))
     else:
         filter_mean = np.sum(X, 1)/N
         filter_sd = np.std(X, 1)
