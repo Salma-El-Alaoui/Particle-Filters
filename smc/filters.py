@@ -2,6 +2,8 @@
 
 import sys
 import numpy as np
+import mpl_toolkits.mplot3d
+from matplotlib import pyplot as plt
 
 from smc import models
 
@@ -45,38 +47,19 @@ def sir(model, observations, N):
     return X, W
 
 
-if __name__ == "__main__":
-    # generate some data and filter it
-    import os
-    model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
-    method = os.environ.get('METHOD', 'sis')
-    T = int(os.environ.get('T', '100'))
-    N = int(os.environ.get('N', '500'))
-    info('(model, method, T, N) =', (model, method, T, N))
-    #model = models.trig_toy_model()
-    gen = list(model.generate(T))
-    X, W = eval(method)(model, [y for x, y in gen], N=N)
-
-    # plot the result
-    __import__('mpl_toolkits.mplot3d')
-    from matplotlib import pyplot as plt
-    #Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)
-    if method == "sis":
-        filter_mean = np.sum(W*X, axis=1)/np.sum(W, axis=1)
-        filter_sd = np.sqrt(np.sum(W*(X - np.tile(filter_mean, (N, 1)).T)**2, axis=1))
-    else:
-        filter_mean = np.sum(X, 1)/N
-        filter_sd = np.std(X, 1)
+def plot_estimate(mean, sd):
+    "Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)"
     fig = plt.figure()
     plt.plot(np.arange(T), [x for x, y in gen], label= "True Volatility")
-    plt.plot(np.arange(T), filter_mean, label="Filter Mean", color='r')
-    plt.plot(np.arange(T),filter_mean + filter_sd, label="+/- 1 S.D", linestyle='--', color='g')
-    plt.plot(np.arange(T),filter_mean - filter_sd, linestyle='--', color='g')
+    plt.plot(np.arange(T), mean, label="Filter Mean", color='r')
+    plt.plot(np.arange(T), mean + sd, label="+/- 1 S.D", linestyle='--', color='g')
+    plt.plot(np.arange(T), mean - sd, linestyle='--', color='g')
     title = "SV Model: " + method.upper() + " Filtering Estimates"
     plt.legend()
     plt.title(title)
-    plt.show()
 
+
+def plot_distribution(X):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     bins = np.linspace(np.min(X)*0.9, np.max(X)*1.1, 100)
@@ -87,7 +70,6 @@ if __name__ == "__main__":
     ax.set_ylabel('$x_t$')
     ax.set_zlabel('$p(x_t | y_{1:t})$')
     step = max(1, T//25)
-
     for t, (x_t, y_t) in list(enumerate(gen))[::step]:
         counts, bins = np.histogram(X[t, :], bins=bins)
         counts = counts / counts.sum()
@@ -96,10 +78,44 @@ if __name__ == "__main__":
         ax.scatter(t, x_t, counts[np.argmin((binpoints - x_t)**2)])
         #ml_est = np.argmax(counts)
         #ax.scatter(t, binpoints[ml_est], counts[ml_est], color='red')
+    return ax
 
+
+if __name__ == "__main__":
+    # generate some data and filter it
+    import os
+    model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
+    method = os.environ.get('METHOD', 'sis')
+    T = int(os.environ.get('T', '100'))
+    N = int(os.environ.get('N', '500'))
+    outname = os.environ.get('OUTPUT')
+    save_3d = bool(int(os.environ.get('SAVE_3D', '0')))
+
+    info('(model, method, T, N) =', (model, method, T, N))
+
+    gen = list(model.generate(T))
+    X, W = eval(method)(model, [y for x, y in gen], N=N)
+
+    # plot the result
+    if method == "sis":
+        filter_mean = np.average(X, weights=W, axis=1)
+        filter_sd = np.sqrt(np.average((X.T - filter_mean).T**2, weights=W, axis=1))
+    else:
+        filter_mean = X.mean(axis=1)
+        filter_sd = X.std(axis=1)
+
+    plot_estimate(filter_mean, filter_sd)
+    ax = plot_distribution(X)
     plt.tight_layout()
-    ax.view_init(25, 45-1.2)
-    plt.savefig('count-r.png', dpi=300)
-    ax.view_init(25, 45+1.2)
-    plt.savefig('count-l.png', dpi=300)
-    #plt.plot(bins, counts)
+
+    if outname and save_3d:
+        ax.view_init(25, 45-1.2)
+        plt.savefig('r{}'.format(outname), dpi=300)
+        ax.view_init(25, 45+1.2)
+        plt.savefig('l{}'.format(outname), dpi=300)
+    elif outname:
+        ax.view_init(25, 45)
+        plt.savefig(outname, dpi=96)
+    else:
+        ax.view_init(25, 45)
+        plt.show()
