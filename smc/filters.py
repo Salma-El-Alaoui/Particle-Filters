@@ -50,6 +50,47 @@ def sir(model, observations, N):
     return X, W
 
 
+def apf(model, observations, N):
+    "auxiliary particle filtering"
+    # Assumptions: q = f, and as stated in reference 23,
+    # "A note on auxiliary particle filters", the function
+    # p(y_t|x_t-1) is approximated as g(y_t|mu(x_t-1)), where
+    # mu is the mode, mean, or median of the function f(x_t|x_t-1). As
+    # f is a gaussian distribution in our case, the mean = median = mode.
+    # This assumption could lead to an estimator with a very large or infinite
+    # variance. If one attempts to calculate the integral that gives p(y_t|x_t-1), one
+    # will arrive with an integrand that is of the form exp(exp(x)), i.e. intractable. An approximation
+    # of this integral should be possible to calculate using numerical approaches.
+    T = len(observations)
+    X = np.zeros((T,N))
+    W = np.zeros((T,N))
+
+    for t, y in enumerate(observations):
+        if t == 0: #Init, T = 0: w_1 = g(y_1|x_1) * g(y_2|alpha*x_1):
+            X[t, :] = model.p_initial.rvs(N)
+            W[t, :] = model.p_emission(t, X[t, :]).pdf(y)*model.p_emission(t, X[t, :]*model.alpha).pdf(y)
+            #print("In t == 0, y -->" + str(y))
+        else: #T > 0: a_n = g(y_n|x_n) * g(y_n+1|alpha*x_n)/g(y_n|alpha*x_n-1)
+            X[t, :] = model.sample_transitions(t, X[t-1, :])
+            W[t, :] = model.p_emission(t, X[t, :]).pdf(y)*model.p_emission(t, X[t, :]*model.alpha).pdf(y)
+
+            denominator = model.p_emission(t, X[t-1, :]*model.alpha).pdf(y)
+            #print("min value denominator " + str(min(denominator)))
+            #print(str(len(denominator)))
+            denominator = [10**(-300) if (x==0) else x for x in denominator]
+            #print(str(min(W[t,:])))
+            W[t, :] = np.divide(W[t, :],denominator)
+            #print(str(min(W[t,:])))
+            #print("----")
+        W[t, :] = W[t, :] / W[t, :].sum()
+        resampled = np.random.choice(N, N, p=W[t, :])
+        info('t {}, eliminated {:.2f}% of particles'.format(t, 100*(1 - len(set(resampled))/N)))
+        X[t, :] = X[t, resampled]
+
+    print(str(X.shape) + " " + str(W.shape))
+    return X, W
+
+
 def plot_estimate(mean, sd):
     "Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)"
     fig = plt.figure()
@@ -102,7 +143,7 @@ if __name__ == "__main__":
     # generate some data and filter it
     import os
     model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
-    method = os.environ.get('METHOD', 'sis')
+    method = os.environ.get('METHOD', 'apf')
     T = int(os.environ.get('T', '100'))
     N = int(os.environ.get('N', '500'))
     outname = os.environ.get('OUTPUT')
@@ -122,7 +163,7 @@ if __name__ == "__main__":
         filter_sd = X.std(axis=1)
 
     plot_estimate(filter_mean, filter_sd)
-    plot_particle_distribution(X, W)
+    #plot_particle_distribution(X, W)
     ax = plot_distribution(X)
     plt.tight_layout()
 
