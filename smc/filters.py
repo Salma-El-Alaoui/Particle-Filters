@@ -2,6 +2,7 @@
 
 import sys
 import numpy as np
+from scipy.stats import entropy
 import mpl_toolkits.mplot3d
 from matplotlib import pyplot as plt
 
@@ -9,6 +10,7 @@ from smc import models
 
 
 info = lambda *a, **k: print(*a, file=sys.stderr, **k)
+
 
 def sis(model, observations, N):
     "sequential important sampling"
@@ -30,7 +32,7 @@ def sis(model, observations, N):
 
 
 
-def sir(model, observations, N):
+def sir(model, observations, N, resampling_criterion=lambda X, W, t: True):
     "sequential importance resampling"
     T = len(observations)
     X = np.zeros((T, N))
@@ -43,11 +45,25 @@ def sir(model, observations, N):
             X[t, :] = model.sample_transitions(t, X[t-1, :])
         W[t, :] = model.p_emission(t, X[t, :]).pdf(y)
         W[t, :] = W[t, :] / W[t, :].sum()
-        resampled = np.random.choice(N, N, p=W[t, :])
-        info('t {}, eliminated {:.2f}% of particles'.format(t, 100*(1 - len(set(resampled))/N)))
-        X[t, :] = X[t, resampled]
+
+        if resampling_criterion(X, W, t):
+            resampled = np.random.choice(N, N, p=W[t, :])
+            eliminated = 1 - len(set(resampled))/N
+            info('t {}, eliminated {:.2f}% of particles'.format(t, 100*eliminated))
+            X[t, :] = X[t, resampled]
 
     return X, W
+
+
+def sir_adaptive_ess(model, observations, N, threshold=2):
+    ess = lambda vals: 1/((vals**2).sum())
+    ess_crit = lambda X, W, t: ess(W[t, :]) < N/threshold
+    return sir(model, observations, N, resampling_criterion=ess_crit)
+
+
+def sir_adaptive_entropy(model, observations, N, threshold=1.055):
+    ent_crit = lambda X, W, t: entropy(W[t, :]) < np.log(N)/threshold
+    return sir(model, observations, N, resampling_criterion=ent_crit)
 
 
 def plot_estimate(mean, sd):
