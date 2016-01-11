@@ -140,6 +140,7 @@ if __name__ == "__main__":
     plot_estimate(filter_mean, filter_sd)
     plot_particle_distribution(X, W)
     ax = plot_distribution(X)
+    plt.title('$\mathcal{{M}}$ = {}, $T$ = {}, $N$ = {}'.format(method, T, N))
     plt.tight_layout()
 
     if outname and save_3d:
@@ -148,7 +149,7 @@ if __name__ == "__main__":
         ax.view_init(25, 45+1.2)
         plt.savefig('l{}'.format(outname), dpi=300)
     elif outname:
-        ax.view_init(25, 45)
+        ax.view_init(25, 55)
         plt.savefig(outname, dpi=96)
     else:
         ax.view_init(25, 45)
