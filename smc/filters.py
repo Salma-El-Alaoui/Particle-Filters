@@ -19,9 +19,12 @@ def sis(model, observations, N):
     for t, y in enumerate(observations):
         if t == 0:
             X[t, :] = model.p_initial.rvs(N)
+            W[t, :] = model.p_emission(t, X[t, :]).pdf(y)
         else:
             X[t, :] = model.sample_transitions(t, X[t-1, :])
-        W[t, :] = model.p_emission(t, X[t, :]).pdf(y)
+            W[t, :] = W[t-1, :]*model.p_emission(t, X[t, :]).pdf(y)
+
+    for t, y in enumerate(observations):
         W[t, :] = W[t, :] / W[t, :].sum()
     return X, W
 
@@ -99,7 +102,7 @@ if __name__ == "__main__":
     # generate some data and filter it
     import os
     model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
-    method = os.environ.get('METHOD', 'sir')
+    method = os.environ.get('METHOD', 'sis')
     T = int(os.environ.get('T', '100'))
     N = int(os.environ.get('N', '500'))
     outname = os.environ.get('OUTPUT')
