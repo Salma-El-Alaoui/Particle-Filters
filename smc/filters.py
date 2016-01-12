@@ -144,15 +144,20 @@ def mcmc(model, observations, N):
                                              stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :])
 
         #accept_value = min([1, acceptance_probability_nominator/acceptance_probability_denominator])
-        accept_values = [x for x in min([1, acceptance_probability_nominator/acceptance_probability_denominator[x]])]
-        print(str(accept_values))
+        acceptance_probability = acceptance_probability_nominator/acceptance_probability_denominator
+        for i in range(N):
+            if min(1, acceptance_probability[i]) >= 1:
+                X[t+1, i] = candidate[i]
+            else:
+                sample = np.random.multinomial(1, [acceptance_probability[i], 1-acceptance_probability[i]], size=1)
+                if sample[0][0] == 1:
+                    X[t+1, i] = candidate[i]
+                else:
+                    X[t+1, i] = X[t, i]
 
 
-        if accept_value >= 1:
-            print("Accepted!")
-        else:
-            print("Sample with prob acceptance_probability")
 
+        #Is the L value really useful in the context of Metropolis-Hastings?
         if t == 0:
             print("1")
             #Sample from kernel n=1
