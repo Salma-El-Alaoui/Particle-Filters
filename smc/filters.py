@@ -2,6 +2,7 @@
 
 import sys
 import numpy as np
+from scipy import stats
 from scipy.stats import entropy
 import mpl_toolkits.mplot3d
 from matplotlib import pyplot as plt
@@ -106,7 +107,64 @@ def apf(model, observations, N):
     print(str(X.shape) + " " + str(W.shape))
     return X, W
 
+def mcmc(model, observations, N):
+    "smc filtering with mcmc Moves"
+    T = len(observations)
+    X = np.zeros((T,N))
+    W = np.zeros((T,N))
+    L = 10 #Fixed lag
+    # #print("1 < n < L")
+    # #print("n >= L")
 
+    for t, y in enumerate(observations):
+        if t == 0:
+            X[t, :] = model.p_initial.rvs(N)
+        else:
+            X[t, :] = model.sample_transitions(t, X[t-1, :])
+
+        W[t, :] = model.p_emission(t, X[t, :]).pdf(y)
+        W[t, :] = W[t, :] / W[t, :].sum()
+        resampled = np.random.choice(N, N, p=W[t, :])
+        info('t {}, eliminated {:.2f}% of particles'.format(t, 100*(1 - len(set(resampled))/N)))
+        X[t, :] = X[t, resampled]
+
+        #MCMC Kernels. We sample N samples of X from the kernel at each iteration and use accepted X to replace the
+        #corresponding from the q-function.
+
+        #Candidate sampling according to Metropolis-Hastings (MH) on page 27.
+        candidate = stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :]) #Essentially, this is the self-engineered proposal distribution
+        #print(str(len(candidate)))
+        #print(str(candidate))
+        acceptance_probability_nominator = model.p_emission(t, candidate).pdf(y) * \
+                                           model.p_transition(t, candidate).pdf(X[t+1, :]) * \
+                                           model.p_transition(t, X[t-1, :]).pdf(X[t, :]) #What should q in the nominator  be?
+
+        acceptance_probability_denominator = model.p_emission(t, X[t, :]).pdf(y) * model.p_transition(t, X[t, :]).pdf(X[t+1, :]) * \
+                                             model.p_transition(t, X[t-1, :]).pdf(X[t, :]) * \
+                                             stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :])
+
+        #accept_value = min([1, acceptance_probability_nominator/acceptance_probability_denominator])
+        accept_values = [x for x in min([1, acceptance_probability_nominator/acceptance_probability_denominator[x]])]
+        print(str(accept_values))
+
+
+        if accept_value >= 1:
+            print("Accepted!")
+        else:
+            print("Sample with prob acceptance_probability")
+
+        if t == 0:
+            print("1")
+            #Sample from kernel n=1
+        elif t > 0 and t < L:
+            print("1 < n < L")
+        else:
+            print("n >= L")
+
+
+
+
+    return 0
 
 def plot_estimate(mean, sd):
     "Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)"
@@ -160,7 +218,7 @@ if __name__ == "__main__":
     # generate some data and filter it
     import os
     model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
-    method = os.environ.get('METHOD', 'sis')
+    method = os.environ.get('METHOD', 'mcmc')
     T = int(os.environ.get('T', '100'))
     N = int(os.environ.get('N', '500'))
     outname = os.environ.get('OUTPUT')
