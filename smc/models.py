@@ -16,6 +16,7 @@ class markov_model():
         return [self.p_transition(t, x).rvs() for x in X]
 
 
+
 class quick_transition_sampling():
     """mixin class that adds a really fast sample_transitions method, requires
     the mean function to be isolated as p_transition_mean"""

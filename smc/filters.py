@@ -2,7 +2,7 @@
 
 import sys
 import numpy as np
-from scipy.stats import entropy
+from scipy.stats import entropy, rv_discrete
 import mpl_toolkits.mplot3d
 from matplotlib import pyplot as plt
 
@@ -10,6 +10,16 @@ from smc import models
 
 
 info = lambda *a, **k: print(*a, file=sys.stderr, **k)
+
+
+def smoothingDis(filtering_func, model, observations, N):
+    T = len(observations)
+    X, W = filtering_func(model, observations, N)
+    P = np.zeros((T, N))
+    P[T-1, :] = W[T-1, :]
+    for t in range(T-2, -1 ,-1):
+        P[t, :] = W[t, :]*model.p_transition(t, X[t,:]).pdf(X[t,:])
+    return X,P
 
 
 def sis(model, observations, N):
@@ -65,8 +75,19 @@ def sir_adaptive_entropy(model, observations, N, threshold=1.055):
     ent_crit = lambda X, W, t: entropy(W[t, :]) < np.log(N)/threshold
     return sir(model, observations, N, resampling_criterion=ent_crit)
 
+def compute_mean_sd(X, W=None):
+    # plot the result
+    if W != None:
+        filter_mean = np.average(X, weights=W, axis=1)
+        filter_sd = np.sqrt(np.average((X.T - filter_mean).T**2, weights=W, axis=1))
+    else:
+        filter_mean = X.mean(axis=1)
+        filter_sd = X.std(axis=1)
 
-def plot_estimate(mean, sd):
+    return filter_mean, filter_sd
+
+
+def plot_estimate(mean, sd, filtering = 1, smoothing_method = None):
     "Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)"
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -74,9 +95,13 @@ def plot_estimate(mean, sd):
     ax.plot(np.arange(T), mean, label="Filter Mean", color='r')
     ax.plot(np.arange(T), mean + sd, label="+/- 1 S.D", linestyle='--', color='g')
     ax.plot(np.arange(T), mean - sd, linestyle='--', color='g')
-    title = "SV Model: " + method.upper() + " Filtering Estimates"
+    if filtering:
+        title = "SV Model: " + method.upper() +" Filtering Estimates"
+    else:
+        title = "SV Model: " + smoothing_method.upper() +" Smoothing Estimates"
     plt.legend()
     plt.title(title)
+    return ax
 
 
 def plot_particle_distribution(X, W, iterations = [2, 10, 50]):
@@ -118,7 +143,7 @@ if __name__ == "__main__":
     # generate some data and filter it
     import os
     model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
-    method = os.environ.get('METHOD', 'sis')
+    method = os.environ.get('METHOD', 'sir')
     T = int(os.environ.get('T', '100'))
     N = int(os.environ.get('N', '500'))
     outname = os.environ.get('OUTPUT')
@@ -128,17 +153,28 @@ if __name__ == "__main__":
 
     gen = list(model.generate(T))
     X, W = eval(method)(model, [y for x, y in gen], N=N)
+    Xs, Ws = smoothingDis(sis, model, [y for x, y in gen], N=N)
+    mean_sis, sd_sis = compute_mean_sd(Xs, Ws)
+    Xsr, Wsr = smoothingDis(sir, model, [y for x, y in gen], N=N)
+    mean_sir, sd_sir = compute_mean_sd(Xsr, Wsr)
 
     # plot the result
     if method == "sis":
-        filter_mean = np.average(X, weights=W, axis=1)
-        filter_sd = np.sqrt(np.average((X.T - filter_mean).T**2, weights=W, axis=1))
+        filter_mean, filter_sd = compute_mean_sd(X, W)
     else:
-        filter_mean = X.mean(axis=1)
-        filter_sd = X.std(axis=1)
+        filter_mean, filter_sd = compute_mean_sd(X)
 
-    plot_estimate(filter_mean, filter_sd)
+    #estimates plots
+    ax = plot_estimate(filter_mean, filter_sd)
+    plt.show()
+    ax = plot_estimate(mean_sis, sd_sis, filtering = 0, smoothing_method = "sis")
+    plt.show()
+    ax = plot_estimate(mean_sir, sd_sir, filtering = 0, smoothing_method = "sir")
+    plt.show()
+    
+    # particle histograms
     plot_particle_distribution(X, W)
+
     ax = plot_distribution(X)
     plt.title('$\mathcal{{M}}$ = {}, $T$ = {}, $N$ = {}'.format(method, T, N))
     plt.tight_layout()
