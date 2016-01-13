@@ -159,6 +159,57 @@ def mcmc(model, observations, N):
 
     return X, W
 
+def block(model, observations, N, L=10, resampling_criterion=lambda X, W, t: True):
+    "block sampling"
+    T = len(observations)
+    X = np.zeros((T, N))
+    Xnew = np.zeros((T, N))
+    W = np.zeros((T, N))
+
+    for t in range(0, T):
+        if t == 0:
+            X[t, :] = model.p_initial.rvs(N)
+            W[t, :] = model.p_emission(t, X[t, :]).pdf(observations[t])
+        elif t < L:
+            Xnew[0, :] = model.p_initial.rvs(N)
+            W[t, :] = np.ones(N)
+            for tt in range (t-1, t+1):
+              Xnew[tt, :] = model.sample_transitions(tt, Xnew[tt-1, :])
+              W[t, :] *= model.p_emission(tt, Xnew[tt, :]).pdf(observations[tt])            
+        else:
+            Xnew[t-L, :] = np.array(X[t-L, :])
+            Wtop = np.ones(N)
+            Wbot = np.ones(N)
+            for tt in range (t-L+1, t+1):
+              Xnew[tt, :] = model.sample_transitions(tt, Xnew[tt-1, :])
+              Wtop *= model.p_emission(tt, Xnew[tt, :]).pdf(observations[tt])
+              if tt <= t:
+                Wbot *= model.p_emission(tt, X[tt, :]).pdf(observations[tt])
+            Wbot = [10**(-300) if (x==0) else x for x in Wbot]
+            W[t, :] = Wtop / Wbot
+
+        W[t, :] = W[t, :] / W[t, :].sum()
+
+        if resampling_criterion(Xnew, W, t):
+            counter += 1
+            resampled = np.random.choice(N, N, p=W[t, :])
+            eliminated = 1 - len(set(resampled))/N
+            info('t {}, eliminated {:.2f}% of particles'.format(t, 100*eliminated))
+            if t < L:
+                X[:, :] = Xnew[:, resampled]
+            else:
+                #X[0:t-L, :] = X[0:t-L, resampled]
+                X[t-L:t, :] = Xnew[t-L:t, resampled]
+        else:
+            X[t, :] = Xnew[t, :]
+
+    return X, W
+
+def block_adaptive_ess(model, observations, N, L=10, threshold=2):
+    ess = lambda vals: 1/((vals**2).sum())
+    ess_crit = lambda X, W, t: ess(W[t, :]) < N/threshold
+    return block(model, observations, N, L, resampling_criterion=ess_crit)
+
 def plot_estimate(mean, sd):
     "Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)"
     fig = plt.figure()
@@ -231,7 +282,7 @@ if __name__ == "__main__":
         filter_sd = X.std(axis=1)
 
     plot_estimate(filter_mean, filter_sd)
-    #plot_particle_distribution(X, W)
+    plot_particle_distribution(X, W)
     ax = plot_distribution(X)
     plt.title('$\mathcal{{M}}$ = {}, $T$ = {}, $N$ = {}'.format(method, T, N))
     plt.tight_layout()
