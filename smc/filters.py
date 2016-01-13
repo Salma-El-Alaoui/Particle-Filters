@@ -266,10 +266,19 @@ if __name__ == "__main__":
     N = int(os.environ.get('N', '500'))
     outname = os.environ.get('OUTPUT')
     save_3d = bool(int(os.environ.get('SAVE_3D', '0')))
+    sv_csv = os.environ.get('SVCSV', '')
+    create_csv = bool(int(os.environ.get('CREATECSV', '0')))
 
     info('(model, method, T, N) =', (model, method, T, N))
 
-    gen = list(model.generate(T))
+    if sv_csv == '':
+      gen = list(model.generate(T))
+      if create_csv:
+        np.savetxt("sv.csv", gen, delimiter=',')
+    else:
+      gen = np.genfromtxt(sv_csv, delimiter=',')
+      T = gen.shape[0]
+
     X, W = eval(method)(model, [y for x, y in gen], N=N)
 
     # plot the result
