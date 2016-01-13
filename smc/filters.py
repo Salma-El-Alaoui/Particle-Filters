@@ -113,6 +113,8 @@ def mcmc(model, observations, N):
     X = np.zeros((T,N))
     W = np.zeros((T,N))
     L = 10 #Fixed lag
+    # #print("1 < n < L")
+    # #print("n >= L")
 
     for t, y in enumerate(observations):
         if t == 0:
@@ -129,30 +131,45 @@ def mcmc(model, observations, N):
         #MCMC Kernels. We sample N samples of X from the kernel at each iteration and use accepted X to replace the
         #corresponding from the q-function.
 
-        #Candidate sampling according to Metropolis-Hastings (MH) on page 27 with some minor modifications.
-        if t == 1 or t < T-1:
-            candidate = stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :]) #Essentially, this is the self-engineered proposal distribution
-            acceptance_probability_nominator = model.p_emission(t, candidate).pdf(y) * \
-                                               model.p_transition(t, candidate).pdf(X[t+1, :]) * \
-                                               model.p_transition(t, X[t-1, :]).pdf(X[t, :]) #What should q in the nominator  be?
+        #Candidate sampling according to Metropolis-Hastings (MH) on page 27.
+        candidate = stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :]) #Essentially, this is the self-engineered proposal distribution
+        #print(str(len(candidate)))
+        #print(str(candidate))
+        acceptance_probability_nominator = model.p_emission(t, candidate).pdf(y) * \
+                                           model.p_transition(t, candidate).pdf(X[t+1, :]) * \
+                                           model.p_transition(t, X[t-1, :]).pdf(X[t, :]) #What should q in the nominator  be?
 
-            acceptance_probability_denominator = model.p_emission(t, X[t, :]).pdf(y) * model.p_transition(t, X[t, :]).pdf(X[t+1, :]) * \
-                                                 model.p_transition(t, X[t-1, :]).pdf(X[t, :]) * \
-                                                 stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :])
+        acceptance_probability_denominator = model.p_emission(t, X[t, :]).pdf(y) * model.p_transition(t, X[t, :]).pdf(X[t+1, :]) * \
+                                             model.p_transition(t, X[t-1, :]).pdf(X[t, :]) * \
+                                             stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :])
 
-            acceptance_probability = acceptance_probability_nominator/acceptance_probability_denominator
-            for i in range(N):
-                if min(1, acceptance_probability[i]) >= 1:
+        #accept_value = min([1, acceptance_probability_nominator/acceptance_probability_denominator])
+        acceptance_probability = acceptance_probability_nominator/acceptance_probability_denominator
+        for i in range(N):
+            if min(1, acceptance_probability[i]) >= 1:
+                X[t+1, i] = candidate[i]
+            else:
+                sample = np.random.multinomial(1, [acceptance_probability[i], 1-acceptance_probability[i]], size=1)
+                if sample[0][0] == 1:
                     X[t+1, i] = candidate[i]
                 else:
-                    sample = np.random.multinomial(1, [acceptance_probability[i], 1-acceptance_probability[i]], size=1)
-                    if sample[0][0] == 1:
-                        X[t+1, i] = candidate[i]
-                    else:
-                        X[t+1, i] = X[t, i]
+                    X[t+1, i] = X[t, i]
 
 
-    return X, W
+
+        #Is the L value really useful in the context of Metropolis-Hastings?
+        if t == 0:
+            print("1")
+            #Sample from kernel n=1
+        elif t > 0 and t < L:
+            print("1 < n < L")
+        else:
+            print("n >= L")
+
+
+
+
+    return 0
 
 def plot_estimate(mean, sd):
     "Reproduction of Figure 2/5 (filtering estimates for SIR/SIS)"
@@ -226,7 +243,7 @@ if __name__ == "__main__":
         filter_sd = X.std(axis=1)
 
     plot_estimate(filter_mean, filter_sd)
-    #plot_particle_distribution(X, W)
+    plot_particle_distribution(X, W)
     ax = plot_distribution(X)
     plt.title('$\mathcal{{M}}$ = {}, $T$ = {}, $N$ = {}'.format(method, T, N))
     plt.tight_layout()
