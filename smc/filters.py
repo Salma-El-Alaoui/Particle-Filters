@@ -140,6 +140,10 @@ def mcmc(model, observations, N):
             acceptance_probability_denominator = model.p_emission(t, X[t, :]).pdf(y) * model.p_transition(t, X[t, :]).pdf(X[t+1, :]) * \
                                                  model.p_transition(t, X[t-1, :]).pdf(X[t, :]) * \
                                                  stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :])
+                                                 # The transition functions f(x_k|x'_k-1) and f(x'_k|x'_k-1) should be the same because
+                                                 # we do not store the previous candidates x'_k-1, i.e. they are in the same list as
+                                                 # x_k-1. We should therefore let them cancel out according to mathematical
+                                                 # procedure.
 
             acceptance_probability = acceptance_probability_nominator/acceptance_probability_denominator
             for i in range(N):
