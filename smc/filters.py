@@ -191,7 +191,6 @@ def block(model, observations, N, L=10, resampling_criterion=lambda X, W, t: Tru
         W[t, :] = W[t, :] / W[t, :].sum()
 
         if resampling_criterion(Xnew, W, t):
-            counter += 1
             resampled = np.random.choice(N, N, p=W[t, :])
             eliminated = 1 - len(set(resampled))/N
             info('t {}, eliminated {:.2f}% of particles'.format(t, 100*eliminated))
