@@ -256,6 +256,27 @@ def plot_distribution(X):
         #ax.scatter(t, binpoints[ml_est], counts[ml_est], color='red')
     return ax
 
+def get_avg_err(model, N, method, gen):
+    X, W = eval(method)(model, [y for x, y in gen], N=N)
+    if method == "sis":
+        filter_mean = np.average(X, weights=W, axis=1)
+        filter_sd = np.sqrt(np.average((X.T - filter_mean).T**2, weights=W, axis=1))
+    else:
+        filter_mean = X.mean(axis=1)
+        filter_sd = X.std(axis=1)
+    avg_err = np.sum(np.abs(filter_mean - gen[:, 0]))/100
+    avg_sqe = np.sum(np.square(filter_mean - gen[:, 0]))/100
+    avg_sd = np.sum(filter_sd)/100
+    return np.array([avg_err, avg_sqe, avg_sd])
+
+def performance_test(model, N, methods):
+    for method in methods:
+        avgs = np.zeros(3)
+        for i in range (0, 20):
+            gen = np.genfromtxt('batches/sv{}.csv'.format(i), delimiter=',')
+            avgs += get_avg_err(model, N, method, gen)
+        avgs /= 20
+        info('(method, avg_err, avg_sqe, avg_sd) =', (method, avgs[0], avgs[1], avgs[2]))
 
 if __name__ == "__main__":
     # generate some data and filter it
@@ -268,8 +289,13 @@ if __name__ == "__main__":
     save_3d = bool(int(os.environ.get('SAVE_3D', '0')))
     sv_csv = os.environ.get('SVCSV', '')
     create_csv = bool(int(os.environ.get('CREATECSV', '0')))
+    perf_test = bool(int(os.environ.get('PERFTEST', '0')))
 
     info('(model, method, T, N) =', (model, method, T, N))
+
+    if perf_test:
+      performance_test(model, N, ['sis', 'sir', 'sir_adaptive_ess', 'sir_adaptive_entropy', \
+                                  'apf', 'mcmc', 'block', 'block_adaptive_ess'])
 
     if sv_csv == '':
       gen = list(model.generate(T))
