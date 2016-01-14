@@ -14,18 +14,21 @@ info = lambda *a, **k: print(*a, file=sys.stderr, **k)
 
 def smoothingDis(filtering_func, model, observations, N):
     T = len(observations)
-    X, W = filtering_func(model, observations, N)
+    sm_particles = np.zeros(T)
+    X, W, particles = filtering_func(model, observations, N)
     P = np.zeros((T, N))
     P[T-1, :] = W[T-1, :]
     for t in range(T-2, -1 ,-1):
         P[t, :] = W[t, :]*model.p_transition(t, X[t,:]).pdf(X[t,:])
-    return X,P
+        sm_particles[t] = particles[T-t-1]
+    return X,P,sm_particles
 
 def sis(model, observations, N):
     "sequential important sampling"
     T = len(observations)
     X = np.zeros((T,N))
     W = np.zeros((T,N))
+    particles = np.zeros(T)
 
     for t, y in enumerate(observations):
         if t == 0:
@@ -37,8 +40,7 @@ def sis(model, observations, N):
 
     for t, y in enumerate(observations):
         W[t, :] = W[t, :] / W[t, :].sum()
-    return X, W
-
+    return X, W, particles
 
 
 def sir(model, observations, N, resampling_criterion=lambda X, W, t: True):
@@ -46,22 +48,27 @@ def sir(model, observations, N, resampling_criterion=lambda X, W, t: True):
     T = len(observations)
     X = np.zeros((T, N))
     W = np.zeros((T, N))
+    particles = np.zeros(T)
 
     for t, y in enumerate(observations):
         if t == 0:
             X[t, :] = model.p_initial.rvs(N)
+            W[t, :] = model.p_emission(t, X[t, :]).pdf(y)
         else:
+            if resampling_criterion(X, W, t):
+                resampled = np.random.choice(N, N, p=W[t-1, :])
+                eliminated = 1 - len(set(resampled))/N
+                particles[t] = len(set(resampled))
+                info('t {}, eliminated {:.2f}% of particles'.format(t, 100*eliminated))
+                X[t-1, :] = X[t-1, resampled]
+                W[t-1, :] = 1/N
+
             X[t, :] = model.sample_transitions(t, X[t-1, :])
-        W[t, :] = model.p_emission(t, X[t, :]).pdf(y)
+            W[t, :] = W[t-1, :]*model.p_emission(t, X[t, :]).pdf(y)
+
         W[t, :] = W[t, :] / W[t, :].sum()
 
-        if resampling_criterion(X, W, t):
-            resampled = np.random.choice(N, N, p=W[t, :])
-            eliminated = 1 - len(set(resampled))/N
-            info('t {}, eliminated {:.2f}% of particles'.format(t, 100*eliminated))
-            X[t, :] = X[t, resampled]
-
-    return X, W
+    return X, W, particles
 
 
 def sir_adaptive_ess(model, observations, N, threshold=2):
@@ -173,6 +180,7 @@ def block(model, observations, N, L=10, resampling_criterion=lambda X, W, t: Tru
     X = np.zeros((T, N))
     Xnew = np.zeros((T, N))
     W = np.zeros((T, N))
+    particles = np.zeros(T)
 
     for t in range(0, T):
         if t == 0:
@@ -201,6 +209,7 @@ def block(model, observations, N, L=10, resampling_criterion=lambda X, W, t: Tru
         if resampling_criterion(Xnew, W, t):
             resampled = np.random.choice(N, N, p=W[t, :])
             eliminated = 1 - len(set(resampled))/N
+            particles[t] = len(set(resampled))
             info('t {}, eliminated {:.2f}% of particles'.format(t, 100*eliminated))
             if t < L:
                 X[:, :] = Xnew[:, resampled]
@@ -210,7 +219,7 @@ def block(model, observations, N, L=10, resampling_criterion=lambda X, W, t: Tru
         else:
             X[t, :] = Xnew[t, :]
 
-    return X, W
+    return X, W, particles
 
 def block_adaptive_ess(model, observations, N, L=10, threshold=2):
     ess = lambda vals: 1/((vals**2).sum())
@@ -232,6 +241,7 @@ def plot_estimate(mean, sd, filtering = 1, smoothing_method = None):
         title = "SV Model: " + smoothing_method.upper() +" Smoothing Estimates"
     plt.legend()
     plt.title(title)
+    plt.ylim([-7,7])
     return ax
 
 def plot_particle_distribution(X, W, iterations = [2, 10, 50]):
@@ -329,11 +339,17 @@ if __name__ == "__main__":
       gen = np.genfromtxt(sv_csv, delimiter=',')
       T = gen.shape[0]
 
-    X, W = eval(method)(model, [y for x, y in gen], N=N)
-    Xs, Ws = smoothingDis(sis, model, [y for x, y in gen], N=N)
-    mean_sis, sd_sis = compute_mean_sd(Xs, Ws)
-    Xsr, Wsr = smoothingDis(sir, model, [y for x, y in gen], N=N)
+    X, W, particles = eval(method)(model, [y for x, y in gen], N=N)
+    Xs, Ws, particles1 = smoothingDis(block, model, [y for x, y in gen], N=N)
+    mean_bl, sd_bl = compute_mean_sd(Xs, Ws)
+    Xsr, Wsr, particles2 = smoothingDis(sir, model, [y for x, y in gen], N=N)
     mean_sir, sd_sir = compute_mean_sd(Xsr, Wsr)
+
+    fig = plt.figure()
+    plt.plot(np.arange(T), particles1, label="block sampling")
+    plt.plot(np.arange(T), particles2, label = "sir")
+    plt.legend()
+    plt.show()
 
     # plot the result
     if method == "sis":
@@ -341,16 +357,18 @@ if __name__ == "__main__":
     else:
         filter_mean, filter_sd = compute_mean_sd(X)
 
+
+
     #estimates plots
     ax = plot_estimate(filter_mean, filter_sd)
     plt.show()
-    ax = plot_estimate(mean_sis, sd_sis, filtering = 0, smoothing_method = "sis")
+    ax = plot_estimate(mean_bl, sd_bl, filtering = 0, smoothing_method = "SIR adaptative ess")
     plt.show()
     ax = plot_estimate(mean_sir, sd_sir, filtering = 0, smoothing_method = "sir")
     plt.show()
 
     # particle histograms
-    plot_particle_distribution(X, W)
+    plot_particle_distribution(Xs, Ws)
 
 
     ax = plot_distribution(X)
