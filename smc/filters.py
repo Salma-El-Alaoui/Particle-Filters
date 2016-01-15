@@ -373,7 +373,7 @@ if __name__ == "__main__":
     ax = plot_estimate(mean_sir, sd_sir, filtering = 0, smoothing_method = "sir")
     plt.show()
 
-    # particle histograms
+    # particle histograms####
     plot_particle_distribution(Xs, Ws)
 
 
