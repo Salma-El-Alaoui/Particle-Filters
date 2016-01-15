@@ -145,31 +145,36 @@ def mcmc(model, observations, N):
         #corresponding from the q-function.
 
         #Candidate sampling according to Metropolis-Hastings (MH) on page 27 with some minor modifications.
-        if t == 1 or t < T-1:
-            candidate = stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :]) #Essentially, this is the self-engineered proposal distribution
+        if t > 1 and t < T-1:
 
-            acceptance_probability_nominator = model.p_emission(t, candidate).pdf(y) * \
-                                               model.p_transition(t, candidate).pdf(X[t+1, :]) * \
-                                               model.p_transition(t, X[t-1, :]).pdf(X[t, :]) #What should q in the nominator  be?
+            for l in range(max(1,t-L), t):
+                candidateMu = 0.5*(model.alpha*X[l-1, :]+(1/model.alpha)*X[l+1, :])
+                candidate = stats.norm(candidateMu, model.sigma**2/2).pdf(X[l, :]) #Essentially, this is the self-engineered proposal distribution
 
-            acceptance_probability_denominator = model.p_emission(t, X[t, :]).pdf(y) * model.p_transition(t, X[t, :]).pdf(X[t+1, :]) * \
-                                                 model.p_transition(t, X[t-1, :]).pdf(X[t, :]) * \
-                                                 stats.norm(0.5*(model.alpha*X[t-1, :]+(1/model.alpha)*X[t+1, :]), model.sigma**2).pdf(X[t, :])
+                acceptance_probability_nominator = model.p_emission(l, candidate).pdf(y) * \
+                                               model.p_transition(l, candidate).pdf(X[l+1, :]) * \
+                                               model.p_transition(l, X[l-1, :]).pdf(X[l, :]) * \
+                                               (1/np.sqrt(model.sigma**2 * np.pi * 2)) * np.exp((X[l, :] - candidateMu)**2 / model.sigma**2)#What should q in the nominator  be?
+
+                acceptance_probability_denominator = model.p_emission(l, X[l, :]).pdf(y) * model.p_transition(l, X[l, :]).pdf(X[l+1, :]) * \
+                                                 model.p_transition(l, X[l-1, :]).pdf(X[l, :]) * \
+                                                 model.p_transition(l, X[l-1, :]).pdf(candidate) * \
+                                                (1/np.sqrt(model.sigma**2 * np.pi * 2)) * np.exp((candidate - candidateMu)**2 / model.sigma**2)
                                                  # The transition functions f(x_k|x'_k-1) and f(x'_k|x'_k-1) should be the same because
                                                  # we do not store the previous candidates x'_k-1, i.e. they are in the same list as
                                                  # x_k-1. We should therefore let them cancel out according to mathematical
                                                  # procedure.
 
-            acceptance_probability = acceptance_probability_nominator/acceptance_probability_denominator
-            for i in range(N):
-                if min(1, acceptance_probability[i]) >= 1:
-                    X[t+1, i] = candidate[i]
-                else:
-                    sample = np.random.multinomial(1, [acceptance_probability[i], 1-acceptance_probability[i]], size=1)
-                    if sample[0][0] == 1:
+                acceptance_probability = acceptance_probability_nominator/acceptance_probability_denominator
+                for i in range(N):
+                    if min(1, acceptance_probability[i]) >= 1:
                         X[t+1, i] = candidate[i]
                     else:
-                        X[t+1, i] = X[t, i]
+                        sample = np.random.multinomial(1, [acceptance_probability[i], 1-acceptance_probability[i]], size=1)
+                        if sample[0][0] == 1:
+                            X[t+1, i] = candidate[i]
+                        else:
+                            X[t+1, i] = X[t, i]
 
 
     return X, W
@@ -316,7 +321,7 @@ if __name__ == "__main__":
     # generate some data and filter it
     import os
     model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
-    method = os.environ.get('METHOD', 'sir')
+    method = os.environ.get('METHOD', 'mcmc')
     T = int(os.environ.get('T', '100'))
     N = int(os.environ.get('N', '500'))
     outname = os.environ.get('OUTPUT')
@@ -328,8 +333,8 @@ if __name__ == "__main__":
     info('(model, method, T, N) =', (model, method, T, N))
 
     if perf_test:
-      performance_test(model, N, ['sis', 'sir', 'sir_adaptive_ess', 'sir_adaptive_entropy', \
-                                  'apf', 'mcmc', 'block', 'block_adaptive_ess'])
+      performance_test(model, N, ['mcmc']) #['sis', 'sir', 'sir_adaptive_ess', 'sir_adaptive_entropy', \
+                                 # 'apf', 'mcmc',])
 
     if sv_csv == '':
       gen = list(model.generate(T))
@@ -339,17 +344,18 @@ if __name__ == "__main__":
       gen = np.genfromtxt(sv_csv, delimiter=',')
       T = gen.shape[0]
 
-    X, W, particles = eval(method)(model, [y for x, y in gen], N=N)
-    Xs, Ws, particles1 = smoothingDis(block, model, [y for x, y in gen], N=N)
+    X, W = eval(method)(model, [y for x, y in gen], N=N)
+
+    '''Xs, Ws, particles1 = smoothingDis(block, model, [y for x, y in gen], N=N)
     mean_bl, sd_bl = compute_mean_sd(Xs, Ws)
     Xsr, Wsr, particles2 = smoothingDis(sir, model, [y for x, y in gen], N=N)
-    mean_sir, sd_sir = compute_mean_sd(Xsr, Wsr)
+    mean_sir, sd_sir = compute_mean_sd(Xsr, Wsr)'''
 
-    fig = plt.figure()
-    plt.plot(np.arange(T), particles1, label="block sampling")
-    plt.plot(np.arange(T), particles2, label = "sir")
-    plt.legend()
-    plt.show()
+    #fig = plt.figure()
+    #plt.plot(np.arange(T), particles1, label="block sampling")
+    #plt.plot(np.arange(T), particles2, label = "sir")
+    #plt.legend()
+    #plt.show()
 
     # plot the result
     if method == "sis":
