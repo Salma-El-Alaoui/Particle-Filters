@@ -250,7 +250,7 @@ def plot_estimate(mean, sd, filtering = 1, smoothing_method = None):
     return ax
 
 def plot_particle_distribution(X, W, iterations = [2, 10, 50]):
-
+    fig = plt.figure()
     N = W[0,:].size
     for n in iterations:
         fig = plt.figure()
@@ -308,6 +308,7 @@ def get_avg_err(model, N, method, gen):
     avg_sd = np.sum(filter_sd)/100
     return np.array([avg_err, avg_sqe, avg_sd])
 
+
 def performance_test(model, N, methods):
     for method in methods:
         avgs = np.zeros(3)
@@ -316,6 +317,7 @@ def performance_test(model, N, methods):
             avgs += get_avg_err(model, N, method, gen)
         avgs /= 20
         info('(method, avg_err, avg_sqe, avg_sd) =', (method, avgs[0], avgs[1], avgs[2]))
+
 
 if __name__ == "__main__":
     # generate some data and filter it
@@ -363,19 +365,14 @@ if __name__ == "__main__":
     else:
         filter_mean, filter_sd = compute_mean_sd(X)
 
-
-
     #estimates plots
     ax = plot_estimate(filter_mean, filter_sd)
-    plt.show()
     ax = plot_estimate(mean_bl, sd_bl, filtering = 0, smoothing_method = "SIR adaptative ess")
-    plt.show()
     ax = plot_estimate(mean_sir, sd_sir, filtering = 0, smoothing_method = "sir")
     plt.show()
 
-    # particle histograms####
-    plot_particle_distribution(Xs, Ws)
-
+    # particle histograms
+    #plot_particle_distribution(Xs, Ws)
 
     ax = plot_distribution(X)
     plt.title('$\mathcal{{M}}$ = {}, $T$ = {}, $N$ = {}'.format(method, T, N))
