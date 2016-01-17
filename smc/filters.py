@@ -59,6 +59,8 @@ def sir(model, observations, N, resampling_criterion=lambda X, W, t: True):
             eliminated = 1 - len(set(resampled))/N
             info('t {}, eliminated {:.2f}% of particles'.format(t, 100*eliminated))
             X[t, :] = X[t, resampled]
+            W[t, :] = 1/N
+
     return X, W
 
 
@@ -356,6 +358,8 @@ if __name__ == "__main__":
 
     #estimates plots
     ax = plot_estimate(filter_mean, filter_sd)
+    #ax = plot_estimate(mean_bl, sd_bl, filtering = 0, smoothing_method = "SIR adaptative ess")
+    #ax = plot_estimate(mean_sir, sd_sir, filtering = 0, smoothing_method = "sir")
     plt.show()
 
     # particle histograms
