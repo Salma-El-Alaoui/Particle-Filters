@@ -3,28 +3,25 @@ import sys
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import rc
+rc('mathtext', default='regular')
+
 from smc.models import stochastic_volatility
 
+scale = 2
+
 with open(sys.argv[1], 'rb') as f:
-    f.seek(0, os.SEEK_END)
-    f.seek(f.tell() - (1<<23))
     f.readline()
     m = np.genfromtxt(f, delimiter=',', dtype=float)
-    m = m[::8, :]
+    m = m[::scale]
 
-m[:, 0] -= m[0, 0]
-m[:, 1] -= m[:, 1].mean()
-#m[:, 
-print(m)
+model = stochastic_volatility(alpha=0.86, sigma=1, beta=0.005)
 
-model = stochastic_volatility(alpha=0.99, sigma=1, beta=0.5)
-
-scale = 3600
-T = int(m[-1, 0]/scale)
+T = m.shape[0]
 
 print('T =', T)
 
-N = 1000
+N = 10000
 X = np.zeros((T, N))
 W = np.zeros((T, N))
 
@@ -34,9 +31,7 @@ for t in range(T):
         X[t, :] = model.p_initial.rvs(N)
         W[t, :] = model.p_emission(t, X[t, :]).pdf(y)
     else:
-        y0 = m[(m[:, 0] >= (t-1)*scale) * (m[:, 0] <= t*scale), 1]
-        y1 = m[(m[:, 0] >= t*scale) * (m[:, 0] <= (t+1)*scale), 1]
-        y = y1.mean() - y0.mean()
+        y = m[t] - m[t-1]
         resampled = np.random.choice(N, N, p=W[t-1, :])
         eliminated = 1 - len(set(resampled))/N
         print('t {}, eliminated {:.2f}% of particles'.format(t, 100*eliminated), file=sys.stderr)
@@ -51,8 +46,18 @@ for t in range(T):
 
     W[t, :] = W[t, :] / W[t, :].sum()
 
-#plt.scatter(m[1:, 0], np.diff(m[:, 1]))
-plt.plot(m[:, 0], m[:, 1])
-print(X.mean(axis=1).shape)
-plt.plot(scale*np.arange(0, T), X.mean(axis=1))
+ts = scale*np.arange(0, T)
+
+fig, ax1 = plt.subplots()
+ax1.grid()
+lns1 = ax1.plot(ts, m, label='GOOG')
+ax2 = ax1.twinx()
+lns2 = ax2.plot(ts, X.mean(axis=1), 'r', label='Estimated volatility')
+lns = lns1 + lns2
+ax1.legend(lns, [ln.get_label() for ln in lns], loc=1)
+#ax1.set_xlim(0, scale*T)
+ax1.set_xlabel("Day")
+ax1.set_ylabel(r"Closing price (USD)")
+ax2.set_ylabel(r"Volatility")
+plt.savefig('googplot.pdf')
 plt.show()
