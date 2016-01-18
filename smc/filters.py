@@ -74,7 +74,9 @@ def sir_adaptive_entropy(model, observations, N, threshold=1.055):
     ent_crit = lambda X, W, t: entropy(W[t, :]) < np.log(N)/threshold
     return sir(model, observations, N, resampling_criterion=ent_crit)
 
-
+'''
+AUTHORS: Leo Carlsson
+'''
 def apf(model, observations, N):
     "auxiliary particle filtering"
     # Assumptions: q = f, and as stated in reference 23,
@@ -115,6 +117,11 @@ def apf(model, observations, N):
     print(str(X.shape) + " " + str(W.shape))
     return X, W
 
+
+
+'''
+AUTHORS: Leo Carlsson, Hlynur Davíð Hlynsson
+'''
 def mcmc(model, observations, N):
     "smc filtering with mcmc Moves"
     T = len(observations)
@@ -316,18 +323,18 @@ if __name__ == "__main__":
     model = eval(os.environ.get('MODEL', 'models.stochastic_volatility.doucet_example_model'))()
     method = os.environ.get('METHOD', 'sir')
     T = int(os.environ.get('T', '100'))
-    N = int(os.environ.get('N', '500'))
+    N = int(os.environ.get('N', '1000'))
     outname = os.environ.get('OUTPUT')
     save_3d = bool(int(os.environ.get('SAVE_3D', '0')))
     sv_csv = os.environ.get('SVCSV', '')
     create_csv = bool(int(os.environ.get('CREATECSV', '0')))
-    perf_test = bool(int(os.environ.get('PERFTEST', '0')))
+    perf_test = bool(int(os.environ.get('PERFTEST', '1')))
 
     info('(model, method, T, N) =', (model, method, T, N))
 
     if perf_test:
-      performance_test(model, N, ['mcmc']) #['sis', 'sir', 'sir_adaptive_ess', 'sir_adaptive_entropy', \
-                                 # 'apf', 'mcmc',])
+      performance_test(model, N, ['sis', 'sir', 'sir_adaptive_ess', 'sir_adaptive_entropy', \
+                                  'apf', 'mcmc',"block", "block_adaptive_ess"])
 
     if sv_csv == '':
       gen = list(model.generate(T))
