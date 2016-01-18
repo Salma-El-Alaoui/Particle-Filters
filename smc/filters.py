@@ -178,7 +178,9 @@ def mcmc(model, observations, N):
 
 
     return X, W
-
+'''
+AUTHOR: Paulina Hensman
+'''
 def block(model, observations, N, L=10, resampling_criterion=lambda X, W, t: True):
     "block sampling"
     T = len(observations)
@@ -292,7 +294,9 @@ def compute_mean_sd(X, W=None):
 
     return filter_mean, filter_sd
 
-
+'''
+AUTHOR: Paulina Hensman
+'''
 def get_avg_err(model, N, method, gen):
     X, W = eval(method)(model, [y for x, y in gen], N=N)
     if method == "sis":
@@ -306,7 +310,9 @@ def get_avg_err(model, N, method, gen):
     avg_sd = np.sum(filter_sd)/100
     return np.array([avg_err, avg_sqe, avg_sd])
 
-
+'''
+AUTHOR: Paulina Hensman
+'''
 def performance_test(model, N, methods):
     for method in methods:
         avgs = np.zeros(3)
