@@ -1,8 +1,7 @@
-# Kurtosis
+# Particle Filtering Tutorial
 
-#Leo Carlsson was here 2016-01-02 14:55
 
-# Trying out the SMC thingy
+## Trying out the SMC thingy
 
 Generating some CSV data, in your shell
 
